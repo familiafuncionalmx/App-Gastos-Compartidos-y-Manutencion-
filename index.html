@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConsensoFamiliar ⚖️</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 pb-20">
+
+    <nav class="bg-indigo-800 p-5 text-white shadow-xl sticky top-0 z-50 text-center">
+        <h1 class="text-2xl font-bold tracking-tight">ConsensoFamiliar</h1>
+        <p class="text-[10px] uppercase tracking-widest opacity-70">Gestión de Manutención · Puebla</p>
+    </nav>
+
+    <div class="max-w-md mx-auto p-4 space-y-6">
+        
+        <section class="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 rounded-3xl shadow-2xl">
+            <h2 class="text-xs font-bold uppercase opacity-60 mb-4 tracking-widest">Balance del Periodo</h2>
+            <div class="flex justify-between items-end mb-2">
+                <div>
+                    <p class="text-3xl font-black" id="total-mes">$0</p>
+                    <p class="text-xs opacity-70 font-medium">Gasto Total Acumulado</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-lg font-bold text-emerald-400" id="balance-texto">Calculando...</p>
+                    <p class="text-[10px] opacity-70">Estado de Aportaciones</p>
+                </div>
+            </div>
+            <div class="w-full bg-white/10 h-3 rounded-full mt-4 overflow-hidden flex">
+                <div id="barra-padre" class="bg-blue-500 h-full transition-all duration-1000" style="width: 50%"></div>
+                <div id="barra-madre" class="bg-rose-500 h-full transition-all duration-1000" style="width: 50%"></div>
+            </div>
+            <div class="flex justify-between text-[10px] mt-2 font-black uppercase tracking-tighter">
+                <span id="txt-porcentaje-padre">Padre (50%)</span>
+                <span id="txt-porcentaje-madre">Madre (50%)</span>
+            </div>
+        </section>
+
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-lg font-bold mb-4 text-indigo-900 flex items-center">
+                <span class="mr-2 text-xl">📝</span> Nueva Aportación
+            </h2>
+            <div class="space-y-4">
+                <input id="desc" type="text" placeholder="Concepto (ej. Despensa, Renta, Salud)" class="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none">
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <input id="monto" type="number" placeholder="Monto $" class="p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold">
+                    <select id="quien" class="p-4 bg-indigo-50 border-none rounded-2xl font-bold text-indigo-700 outline-none">
+                        <option value="Padre">Pagué Yo</option>
+                        <option value="Madre">Pagó Ella</option>
+                    </select>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200 text-center relative">
+                    <input id="foto" type="file" accept="image/*" capture="environment" class="hidden">
+                    <label for="foto" id="foto-label" class="cursor-pointer text-indigo-600 font-bold text-sm block">
+                         📸 Tomar Foto del Ticket
+                    </label>
+                </div>
+
+                <button onclick="guardarTodo()" id="btnGuardar" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">
+                    GUARDAR Y NOTIFICAR
+                </button>
+            </div>
+        </section>
+
+        <section class="bg-amber-50 p-6 rounded-2xl border border-amber-100">
+            <h2 class="text-md font-bold text-amber-900 mb-3 flex items-center">
+                <span class="mr-2">📦</span> Existencias Recientes
+            </h2>
+            <div id="lista-inventario" class="grid grid-cols-2 gap-2 text-[11px] font-medium text-amber-800">
+                </div>
+        </section>
+
+        <div class="space-y-3">
+            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Evidencias Registradas</h2>
+            <div id="lista-gastos" class="space-y-3">
+                </div>
+        </div>
+
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://xuhpbhbjaekfbcujhxse.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_IirGjNZyyjLebL-OmFokbw__JV4tgt_';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // Actualizar etiqueta de foto al seleccionar
+        document.getElementById('foto').onchange = function() {
+            document.getElementById('foto-label').innerText = "✅ Foto lista para subir";
+        };
+
+        async function guardarTodo() {
+            const btn = document.getElementById('btnGuardar');
+            const desc = document.getElementById('desc').value;
+            const monto = parseFloat(document.getElementById('monto').value);
+            const quien = document.getElementById('quien').value;
+            const fotoFile = document.getElementById('foto').files[0];
+
+            if(!desc || !monto) return alert("Ingresa concepto y monto.");
+            
+            btn.disabled = true;
+            btn.innerText = "Registrando...";
+
+            let urlPublica = null;
+
+            if(fotoFile) {
+                const nombreFoto = `${Date.now()}_ticket.jpg`;
+                const { error: errFoto } = await supabase.storage.from('tickets').upload(nombreFoto, fotoFile);
+                if(!errFoto) {
+                    const { data: dUrl } = supabase.storage.from('tickets').getPublicUrl(nombreFoto);
+                    urlPublica = dUrl.publicUrl;
+                }
+            }
+
+            await supabase.from('gastos').insert([{ descripcion: desc, monto: monto, quien_pago: quien, comprobante_url: urlPublica }]);
+            
+            // Lógica de inventario automática
+            const itemsClave = ["cereal", "leche", "papel", "jabon", "aceite", "huevo", "pan"];
+            if(itemsClave.some(item => desc.toLowerCase().includes(item))) {
+                await supabase.from('inventario').insert([{ producto: desc }]);
+            }
+
+            location.reload();
+        }
+
+        async function cargarApp() {
+            // 1. Obtener Configuración
+            const { data: config } = await supabase.from('configuracion_pension').select('*').eq('id', 1).single();
+            const pPadre = config ? config.porcentaje_padre : 50;
+            const pMadre = config ? config.porcentaje_madre : 50;
+            
+            document.getElementById('txt-porcentaje-padre').innerText = `Padre (${pPadre}%)`;
+            document.getElementById('txt-porcentaje-madre').innerText = `Madre (${pMadre}%)`;
+
+            // 2. Obtener Gastos
+            let { data: gastos } = await supabase.from('gastos').select('*').order('fecha', {ascending: false});
+            
+            let sumaPadre = 0;
+            let sumaMadre = 0;
+
+            const listaG = document.getElementById('lista-gastos');
+            listaG.innerHTML = gastos.map(g => {
+                const m = parseFloat(g.monto);
+                if(g.quien_pago === 'Padre') sumaPadre += m;
+                else sumaMadre += m;
+
+                return `
+                <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 ${g.quien_pago === 'Padre' ? 'border-blue-500' : 'border-rose-500'}">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[10px] font-black ${g.quien_pago === 'Padre' ? 'text-blue-600' : 'text-rose-600'} uppercase">${g.quien_pago}</span>
+                        <span class="text-[10px] text-slate-400 font-bold">${new Date(g.fecha).toLocaleDateString()}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <p class="font-bold text-slate-800 text-sm">${g.descripcion}</p>
+                        <p class="text-lg font-black text-slate-900">$${m.toLocaleString()}</p>
+                    </div>
+                    ${g.comprobante_url ? `<a href="${g.comprobante_url}" target="_blank" class="text-[10px] text-indigo-600 font-bold mt-2 block underline">📄 VER COMPROBANTE</a>` : ''}
+                </div>`;
+            }).join('');
+
+            // 3. Cálculos Proporcionales
+            const total = sumaPadre + sumaMadre;
+            document.getElementById('total-mes').innerText = `$${total.toLocaleString()}`;
+            
+            // Porcentaje visual basado en lo gastado vs lo que toca poner
+            const cuotaPadre = total * (pPadre / 100);
+            const balance = sumaPadre - cuotaPadre;
+            
+            const pctBarra = (sumaPadre / total) * 100 || 50;
+            document.getElementById('barra-padre').style.width = `${pctBarra}%`;
+            document.getElementById('barra-madre').style.width = `${100 - pctBarra}%`;
+
+            const balanceTexto = document.getElementById('balance-texto');
+            if (Math.abs(balance) < 1) {
+                balanceTexto.innerText = "Equilibrio";
+                balanceTexto.className = "text-lg font-bold text-emerald-400";
+            } else if (balance > 0) {
+                balanceTexto.innerText = `A favor Padre: $${balance.toFixed(0)}`;
+                balanceTexto.className = "text-lg font-bold text-blue-400";
+            } else {
+                balanceTexto.innerText = `A favor Madre: $${Math.abs(balance).toFixed(0)}`;
+                balanceTexto.className = "text-lg font-bold text-rose-400";
+            }
+
+            // 4. Inventario
+            let { data: inv } = await supabase.from('inventario').select('*').order('ultima_actualizacion', {ascending: false}).limit(6);
+            document.getElementById('lista-inventario').innerHTML = inv.map(i => `
+                <div class="bg-white/60 p-2 rounded-xl border border-amber-200">
+                    ✅ ${i.producto}
+                </div>
+            `).join('');
+        }
+
+        cargarApp();
+    </script>
+</body>
+</html>
