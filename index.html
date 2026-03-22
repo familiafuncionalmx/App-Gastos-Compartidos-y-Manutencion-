@@ -8,13 +8,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .modal-active { display: flex !important; }
+        .loading { pointer-events: none; opacity: 0.6; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 pb-20 font-sans">
 
     <nav class="bg-indigo-800 p-5 text-white shadow-xl sticky top-0 z-50 text-center">
         <h1 class="text-2xl font-bold tracking-tight">ConsensoFamiliar</h1>
-        <p class="text-[10px] uppercase tracking-widest opacity-70">Gestión de Manutención · Puebla</p>
+        <p class="text-[10px] uppercase tracking-widest opacity-70">Puebla · Gestión de Manutención</p>
     </nav>
 
     <div class="max-w-md mx-auto p-4 space-y-6">
@@ -41,12 +42,12 @@
             </div>
         </section>
 
-        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200" id="form-container">
             <h2 class="text-lg font-bold mb-4 text-indigo-900 flex items-center">
-                <span class="mr-2 text-xl">📝</span> Nueva Aportación
+                <span class="mr-2 text-xl">📝</span> Registrar Gasto
             </h2>
             <div class="space-y-4">
-                <input id="desc" type="text" placeholder="Concepto (ej. Despensa, Renta, Salud)" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500">
+                <input id="desc" type="text" placeholder="¿En qué se gastó?" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500">
                 <div class="grid grid-cols-2 gap-3">
                     <input id="monto" type="number" placeholder="Monto $" class="p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold">
                     <select id="quien" class="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl font-bold text-indigo-700 outline-none">
@@ -56,31 +57,33 @@
                 </div>
                 <div class="bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200 text-center relative">
                     <input id="foto" type="file" accept="image/*" capture="environment" class="hidden">
-                    <label for="foto" id="foto-label" class="cursor-pointer text-indigo-600 font-bold text-sm block">📸 Tomar Foto del Ticket</label>
+                    <label for="foto" id="foto-label" class="cursor-pointer text-indigo-600 font-bold text-sm block">📸 Tomar Foto del Ticket (Opcional)</label>
                 </div>
                 <button onclick="guardarTodo()" id="btnGuardar" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">GUARDAR GASTO</button>
             </div>
         </section>
 
         <div class="space-y-3">
-            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Evidencias Registradas</h2>
+            <h2 class="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Historial de Evidencias</h2>
             <div id="lista-gastos" class="space-y-3">
-                </div>
+                <p class="text-center text-slate-400 py-10">Cargando registros...</p>
+            </div>
         </div>
     </div>
 
     <div id="modal-foto" class="fixed inset-0 bg-black/90 z-[100] hidden flex-col items-center justify-center p-4" onclick="cerrarModal()">
-        <img id="img-full" src="" class="max-w-full max-h-[80vh] rounded-lg shadow-2xl">
-        <p class="text-white mt-4 font-bold">Toca cualquier lugar para cerrar</p>
+        <img id="img-full" src="" class="max-w-full max-h-[80vh] rounded-lg">
+        <p class="text-white mt-4 font-bold">Toca para cerrar</p>
     </div>
 
     <script>
+        // CONFIGURACIÓN DE CONEXIÓN
         const SUPABASE_URL = 'https://xuhpbhbjaekfbcujhxse.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_IirGjNZyyjLebL-OmFokbw__JV4tgt_';
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         document.getElementById('foto').onchange = function() {
-            if(this.files && this.files[0]) document.getElementById('foto-label').innerText = "✅ Foto lista";
+            if(this.files && this.files[0]) document.getElementById('foto-label').innerText = "✅ Foto capturada";
         };
 
         function verFoto(url) {
@@ -94,75 +97,102 @@
 
         async function guardarTodo() {
             const btn = document.getElementById('btnGuardar');
+            const form = document.getElementById('form-container');
             const desc = document.getElementById('desc').value;
             const monto = parseFloat(document.getElementById('monto').value);
             const quien = document.getElementById('quien').value;
             const fotoFile = document.getElementById('foto').files[0];
 
-            if(!desc || isNaN(monto)) return alert("Completa concepto y monto.");
+            if(!desc || isNaN(monto)) return alert("Por favor ingresa descripción y monto.");
             
             btn.disabled = true;
-            btn.innerText = "Registrando...";
+            btn.innerText = "Subiendo datos...";
+            form.classList.add('loading');
 
-            let urlPublica = null;
-            if(fotoFile) {
-                const nombreFoto = `${Date.now()}_ticket.jpg`;
-                const { data } = await supabase.storage.from('tickets').upload(nombreFoto, fotoFile);
-                if(data) {
+            try {
+                let urlPublica = null;
+                if(fotoFile) {
+                    const nombreFoto = `${Date.now()}_ticket.jpg`;
+                    const { data, error: errorSubida } = await supabase.storage.from('tickets').upload(nombreFoto, fotoFile);
+                    if(errorSubida) throw errorSubida;
+                    
                     const { data: dUrl } = supabase.storage.from('tickets').getPublicUrl(nombreFoto);
                     urlPublica = dUrl.publicUrl;
                 }
-            }
 
-            const { error } = await supabase.from('gastos').insert([{ descripcion: desc, monto: monto, quien_pago: quien, comprobante_url: urlPublica }]);
-            if(error) alert("Error: " + error.message);
-            else location.reload();
+                const { error: errorBD } = await supabase.from('gastos').insert([
+                    { descripcion: desc, monto: monto, quien_pago: quien, comprobante_url: urlPublica }
+                ]);
+                
+                if(errorBD) throw errorBD;
+                location.reload();
+
+            } catch (err) {
+                alert("Error al guardar: " + err.message);
+                btn.disabled = false;
+                btn.innerText = "GUARDAR GASTO";
+                form.classList.remove('loading');
+            }
         }
 
         async function cargarApp() {
-            const { data: config } = await supabase.from('configuracion_pension').select('*').eq('id', 1).single();
-            const { data: gastos } = await supabase.from('gastos').select('*').order('fecha', {ascending: false});
-            
-            const pPadre = config?.porcentaje_padre || 50;
-            const pMadre = config?.porcentaje_madre || 50;
-            document.getElementById('txt-porcentaje-padre').innerText = `Padre (${pPadre}%)`;
-            document.getElementById('txt-porcentaje-madre').innerText = `Madre (${pMadre}%)`;
+            try {
+                const { data: config } = await supabase.from('configuracion_pension').select('*').eq('id', 1).single();
+                const { data: gastos, error: errG } = await supabase.from('gastos').select('*').order('fecha', {ascending: false});
+                
+                if(errG) throw errG;
 
-            let sumaPadre = 0, sumaMadre = 0;
-            const listaG = document.getElementById('lista-gastos');
+                const pPadre = config?.porcentaje_padre || 50;
+                const pMadre = config?.porcentaje_madre || 50;
+                document.getElementById('txt-porcentaje-padre').innerText = `Padre (${pPadre}%)`;
+                document.getElementById('txt-porcentaje-madre').innerText = `Madre (${pMadre}%)`;
 
-            listaG.innerHTML = gastos.map(g => {
-                const m = parseFloat(g.monto);
-                if(g.quien_pago === 'Padre') sumaPadre += m; else sumaMadre += m;
+                let sumaPadre = 0, sumaMadre = 0;
+                const listaG = document.getElementById('lista-gastos');
 
-                return `
-                <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 ${g.quien_pago === 'Padre' ? 'border-blue-500' : 'border-rose-500'} flex justify-between items-center gap-4">
-                    <div class="flex-1">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-[10px] font-black ${g.quien_pago === 'Padre' ? 'text-blue-600' : 'text-rose-600'} uppercase">${g.quien_pago}</span>
-                            <span class="text-[10px] text-slate-400 font-bold">${new Date(g.fecha).toLocaleDateString()}</span>
-                        </div>
-                        <p class="font-bold text-slate-800 text-sm leading-tight">${g.descripcion}</p>
-                        <p class="text-xl font-black text-slate-900 mt-1">$${m.toLocaleString('es-MX')}</p>
-                    </div>
-                    ${g.comprobante_url ? `
-                        <div onclick="verFoto('${g.comprobante_url}')" class="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shadow-inner flex-shrink-0 cursor-pointer active:scale-90 transition-transform">
-                            <img src="${g.comprobante_url}" class="w-full h-full object-cover">
-                        </div>
-                    ` : ''}
-                </div>`;
-            }).join('');
+                if(gastos.length === 0) {
+                    listaG.innerHTML = '<p class="text-center text-slate-400 py-10">No hay gastos registrados este mes.</p>';
+                } else {
+                    listaG.innerHTML = gastos.map(g => {
+                        const m = parseFloat(g.monto);
+                        if(g.quien_pago === 'Padre') sumaPadre += m; else sumaMadre += m;
 
-            const total = sumaPadre + sumaMadre;
-            document.getElementById('total-mes').innerText = `$${total.toLocaleString('es-MX')}`;
-            const balance = sumaPadre - (total * (pPadre / 100));
-            
-            document.getElementById('barra-padre').style.width = total > 0 ? `${(sumaPadre/total)*100}%` : '50%';
-            
-            const bTxt = document.getElementById('balance-texto');
-            if(balance > 0) bTxt.innerText = `Padre a favor: $${Math.abs(balance).toFixed(0)}`;
-            else if(balance < 0) bTxt.innerText = `Madre a favor: $${Math.abs(balance).toFixed(0)}`;
-            else bTxt.innerText = "Equilibrio";
+                        return `
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 ${g.quien_pago === 'Padre' ? 'border-blue-500' : 'border-rose-500'} flex justify-between items-center gap-4">
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-[10px] font-black ${g.quien_pago === 'Padre' ? 'text-blue-600' : 'text-rose-600'} uppercase">${g.quien_pago}</span>
+                                    <span class="text-[10px] text-slate-400 font-bold">${new Date(g.fecha).toLocaleDateString()}</span>
+                                </div>
+                                <p class="font-bold text-slate-800 text-sm">${g.descripcion}</p>
+                                <p class="text-xl font-black text-slate-900 mt-1">$${m.toLocaleString('es-MX')}</p>
+                            </div>
+                            ${g.comprobante_url ? `
+                                <div onclick="verFoto('${g.comprobante_url}')" class="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 flex-shrink-0 cursor-pointer">
+                                    <img src="${g.comprobante_url}" class="w-full h-full object-cover">
+                                </div>
+                            ` : ''}
+                        </div>`;
+                    }).join('');
+                }
+
+                const total = sumaPadre + sumaMadre;
+                document.getElementById('total-mes').innerText = `$${total.toLocaleString('es-MX', {minimumFractionDigits: 0})}`;
+                
+                const cuotaPadreReal = total * (pPadre / 100);
+                const balance = sumaPadre - cuotaPadreReal;
+                
+                document.getElementById('barra-padre').style.width = total > 0 ? `${(sumaPadre/total)*100}%` : '50%';
+                
+                const bTxt = document.getElementById('balance-texto');
+                if(balance > 0) bTxt.innerText = `Padre a favor: $${Math.abs(balance).toFixed(0)}`;
+                else if(balance < 0) bTxt.innerText = `Madre a favor: $${Math.abs(balance).toFixed(0)}`;
+                else bTxt.innerText = "Equilibrio";
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('lista-gastos').innerHTML = `<p class="text-red-500 text-center">Error de conexión con la base de datos.</p>`;
+            }
         }
 
         window.onload = cargarApp;
